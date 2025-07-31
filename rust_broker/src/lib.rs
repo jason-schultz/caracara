@@ -9,6 +9,9 @@ use tonic::{Request, Response, Status};
 
 pub mod caracara {
     tonic::include_proto!("caracara");
+
+    pub const FILE_DESCRIPTOR_SET: &[u8] =
+        tonic::include_file_descriptor_set!("caracara_descriptor");
 }
 
 use caracara::caracara_server::{Caracara, CaracaraServer};
@@ -42,14 +45,39 @@ impl Caracara for BrokerService {
         request: Request<SendMessageRequest>,
     ) -> Result<Response<SendMessageReply>, Status> {
         let req = request.into_inner();
-        println!("Received message for topic '{}'", &req.topic);
+        let topic_name = req.topic.clone();
+        println!(
+            "[send_message] Received message for topic '{}'",
+            &topic_name
+        );
 
-        if let Some(sender) = self.state.topics.get(&req.topic) {
-            sender.send(Bytes::from(req.payload)).ok();
+        // Get the sender for the topic. If the topic doesn't exist, create it.
+        let sender = self
+            .state
+            .topics
+            .entry(topic_name.clone())
+            .or_insert_with(|| {
+                println!("[send_message] Creating new topic: {}", &topic_name);
+                let (sender, _) = broadcast::channel(1024);
+                Arc::new(sender)
+            });
+
+        // Let's see how many active subscribers there are before we send.
+        println!(
+            "[send_message] Topic '{}' has {} active subscribers.",
+            &topic_name,
+            sender.receiver_count()
+        );
+
+        // Send the message payload to all subscribers of the topic.
+        if let Err(e) = sender.send(Bytes::from(req.payload)) {
+            println!("[send_message] ERROR: Failed to send message: {}", e);
+        } else {
+            println!("[send_message] Message sent successfully.");
         }
 
         let reply = SendMessageReply {
-            status: format!("Message sent to topic '{}'", req.topic),
+            status: format!("Message sent to topic '{}'", topic_name),
         };
 
         Ok(Response::new(reply))
@@ -93,8 +121,19 @@ impl Caracara for BrokerService {
         &self,
         _request: Request<ListTopicsRequest>,
     ) -> Result<Response<ListTopicsReply>, Status> {
-        let topics = self.state.topics.iter().map(|r| r.key().clone()).collect();
-        let reply = ListTopicsReply { topics };
+        println!("[list_topics] Request received to list topics.");
+        let topic_names: Vec<String> = self
+            .state
+            .topics
+            .iter()
+            .map(|entry| entry.key().clone())
+            .collect();
+
+        println!("[list_topics] Returning topics: {:?}", topic_names);
+
+        let reply = ListTopicsReply {
+            topics: topic_names,
+        };
         Ok(Response::new(reply))
     }
 }

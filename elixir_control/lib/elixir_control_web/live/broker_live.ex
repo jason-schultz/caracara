@@ -5,16 +5,12 @@ defmodule ElixirControlWeb.BrokerLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    topics =
-      case BrokerClient.list_topics() do
-        {:ok, reply} -> reply.topics
-        {:error, _} -> []
-      end
+    if connected?(socket), do: send(self(), :refresh_topics)
 
     socket =
       assign(socket,
-        topics: topics,
-        messages: [],
+        topics: [],
+        messages_by_topic: %{},
         selected_topic: nil,
         subscription_pid: nil
       )
@@ -23,39 +19,57 @@ defmodule ElixirControlWeb.BrokerLive do
   end
 
   @impl true
+  def handle_info(:refresh_topics, socket) do
+    result = BrokerClient.list_topics() |> IO.inspect(label: "BrokerClient.list_topics result")
+
+    topics =
+      case result do
+        {:ok, reply} -> reply.topics
+        {:error, _} -> []
+      end
+
+    Process.send_after(self(), :refresh_topics, 5_000)
+
+    {:noreply, assign(socket, :topics, topics)}
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <h1 class="text-2xl font-bold mb-4">Caracara Broker Control</h1>
 
     <div class="grid grid-cols-3 gap-6">
-      <div class="col-span-1">
-        <h2 class="text-xl font-semibold">Topics</h2>
-        <ul class="list-disc list-inside mt-2">
-          <.link
-            :for={topic <- @topics}
+    <div class="col-span-1 bg-gray-50 p-4 rounded-lg">
+    <h2 class="text-lg font-semibold border-b pb-2 mb-2">Topics</h2>
+    <ul class="space-y-1">
+      <%= if Enum.empty?(@topics) do %>
+        <li class="text-gray-500">No topics found.</li>
+      <% else %>
+        <%= for topic <- @topics do %>
+          <li
+            class="cursor-pointer p-2 rounded hover:bg-blue-100"
             phx-click="select_topic"
             phx-value-topic={topic}
-            class={"cursor-pointer p-2 rounded #{if topic == @selected_topic, do: "bg-blue-500 text-white", else: "hover:bg-gray-200"}"}
           >
-            <li><%= topic %></li>
-          </.link>
-        </ul>
-        <p :if={@topics == []} class="text-gray-500">No topics found.</p>
-      </div>
+            <%= topic %>
+          </li>
+        <% end %>
+      <% end %>
+    </ul>
+    </div>
 
-      <div class="col-span-2">
-        <h2 class="text-xl font-semibold">
-          Messages for <span class="font-bold text-blue-600"><%= @selected_topic || "..." %></span>
-        </h2>
-        <div id="messages" class="mt-2 p-4 border rounded-lg h-96 overflow-y-auto bg-gray-50">
-          <div :for={msg <- @messages} class="p-2 border-b">
-            <p class="font-mono text-sm"><%= Base.encode64(msg.payload) %></p>
-          </div>
-          <p :if={@messages == []} class="text-gray-500">
-            <%= if @selected_topic, do: "No messages yet.", else: "Select a topic to view messages." %>
-          </p>
-        </div>
-      </div>
+    <div class="col-span-2 bg-gray-50 p-4 rounded-lg">
+    <h2 class="text-lg font-semibold border-b pb-2 mb-2">
+      Messages for <%= @selected_topic || "..." %>
+    </h2>
+    <div class="h-96 overflow-y-auto border p-2 bg-white">
+      <%= for message <- @messages_by_topic[@selected_topic] || [] do %>
+        <li class="p-2 bg-gray-100 rounded text-sm font-mono">
+          <%= to_string(message.payload) %>
+        </li>
+      <% end %>
+    </div>
+    </div>
     </div>
     """
   end
@@ -70,14 +84,25 @@ defmodule ElixirControlWeb.BrokerLive do
 
     subscription_pid =
       spawn(fn ->
-        case BrokerClient.subscribe(topic) do
+        IO.puts("--- SPAWN: Subscribing to '#{topic}' ---")
+        result = BrokerClient.subscribe(topic)
+        IO.inspect(result, label: "SPAWN: BrokerClient.subscribe result")
+
+        case result do
           {:ok, stream} ->
+            IO.puts("SPAWN: Subscription successful. Waiting for messages...")
+
             stream
-            |> Enum.each(fn {:ok, message} ->
-              send(live_view_pid, {:new_message, message})
+            |> Stream.each(fn {:ok, message} ->
+              IO.inspect(message, label: "SPAWN: Received message")
+              send(live_view_pid, {:new_message, topic, message})
             end)
+            |> Stream.run()
+
+            IO.puts("SPAWN: Stream finished.")
 
           {:error, reason} ->
+            IO.puts("SPAWN: Subscription failed!")
             send(live_view_pid, {:subscription_failed, reason})
         end
       end)
@@ -85,7 +110,6 @@ defmodule ElixirControlWeb.BrokerLive do
     socket =
       assign(socket,
         selected_topic: topic,
-        messages: [],
         subscription_pid: subscription_pid
       )
 
@@ -93,10 +117,15 @@ defmodule ElixirControlWeb.BrokerLive do
   end
 
   @impl true
-  def handle_info({:new_message, message}, socket) do
-    # Prepend new message and cap the list at 50
-    messages = [message | socket.assigns.messages] |> Enum.take(50)
-    {:noreply, assign(socket, :messages, messages)}
+  def handle_info({:new_message, topic, message}, socket) do
+    socket =
+      update(socket, :messages_by_topic, fn messages_by_topic ->
+        # We prepend the new message and keep the last 50
+        new_messages = [message | Map.get(messages_by_topic, topic, [])] |> Enum.take(50)
+        Map.put(messages_by_topic, topic, new_messages)
+      end)
+
+    {:noreply, socket}
   end
 
   def handle_info({:subscription_failed, reason}, socket) do

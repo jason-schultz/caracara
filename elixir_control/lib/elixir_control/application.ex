@@ -8,7 +8,7 @@ defmodule ElixirControl.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      ElixirControl.BrokerConnection,
+      # ElixirControl.BrokerConnection,
       ElixirControlWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:elixir_control, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: ElixirControl.PubSub},
