@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO retained_messages (topic_id, payload) VALUES ($1, $2)\n            ON CONFLICT (topic_id) DO UPDATE SET payload = EXCLUDED.payload\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4c2954f2bae3eaf84c357540f5f32d9e2f0a10375eacacaa760abb7d1fa9a35a"
+}
