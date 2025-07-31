@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package caracara;
+
+// The Caracara service definition.
+service Caracara {
+  // Sends a message
+  rpc SendMessage (SendMessageRequest) returns (SendMessageReply);
+
+  // Subscribes to a topic to receive messages.
+  rpc Subscribe (SubscribeRequest) returns (stream Message);
+
+  // Lists all available topics.
+  rpc ListTopics (ListTopicsRequest) returns (ListTopicsReply);
+}
+
+// The request message containing the message to be sent.
+message SendMessageRequest {
+  string topic = 1;
+  bytes payload = 2;
+}
+
+// The response message containing the status of the send operation.
+message SendMessageReply {
+  string status = 1;
+}
+
+// The request message for subscribing to a topic.
+message SubscribeRequest {
+    string topic = 1;
+}
+
+// A message sent from the broker to a subscriber.
+message Message {
+    bytes payload = 1;
+}
+
+// The request message for listing topics.
+message ListTopicsRequest {}
+
+// The response message containing the list of topics.
+message ListTopicsReply {
+    repeated string topics = 1;
+}

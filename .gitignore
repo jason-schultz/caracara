@@ -1,0 +1,6 @@
+/elixir_control/_build/
+/elixir_control/deps/
+/elixir_control/.elixir_ls/
+/rust_broker/target/
+/*.env
+/.env
