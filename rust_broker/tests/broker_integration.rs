@@ -11,6 +11,7 @@ use tokio::sync::OnceCell; // Use tokio's OnceCell for async initialization
 use tokio_stream::StreamExt;
 use tonic::transport::Server;
 
+// Put this in a shared module for test helpers
 // This OnceCell will hold our database pool.
 static TEST_POOL: OnceCell<PgPool> = OnceCell::const_new();
 

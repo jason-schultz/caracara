@@ -80,7 +80,8 @@ impl Caracara for BrokerService {
                 .await
                 .map_err(|e| Status::internal(e.to_string()))?
             {
-                Some(topic) => Ulid::from_string(&topic.id).unwrap(),
+                Some(topic) => Ulid::from_string(&topic.id)
+                    .map_err(|e| Status::internal(format!("Invalid ULID in database: {}", e)))?,
                 None => {
                     let new_id = Ulid::new();
                     sqlx::query!(
