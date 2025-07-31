@@ -4,13 +4,23 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tonic = "0.11"
-tonic-reflection = "0.11"
+anyhow = "1.0.86"
+bytes = "1"
+dashmap = "5.5.3"
+dotenvy = "0.15.7"
+futures = "0.3.31"
 prost = "0.12"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
-bytes = "1"
 tokio-stream = { version = "0.1", features = ["sync", "net"] }
-dashmap = "5.5.3"
+tonic = "0.11"
+tonic-reflection = "0.11"
+sqlx = { version = "0.8.0", features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "postgres",
+    "macros",
+] }
+ulid = "1.1.2"
 
 [build-dependencies]
 tonic-build = "0.11"
