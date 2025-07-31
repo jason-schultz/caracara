@@ -14,7 +14,7 @@ pub mod caracara {
         tonic::include_file_descriptor_set!("caracara_descriptor");
 }
 
-use caracara::caracara_server::{Caracara, CaracaraServer};
+use caracara::caracara_server::Caracara;
 use caracara::{
     ListTopicsReply, ListTopicsRequest, Message, SendMessageReply, SendMessageRequest,
     SubscribeRequest,
